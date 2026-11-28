@@ -11069,6 +11069,28 @@ async fn test_cut_last_empty_line(cx: &mut TestAppContext) {
     cx.update_editor(|e, window, cx| e.cut(&Cut, window, cx));
     cx.assert_editor_state("one\nˇ");
 
+    // A last line with only spaces is a whole line too: the preceding
+    // newline is removed, consistent with non-last whitespace lines.
+    cx.set_state("one\ntwo\n   ˇ");
+    cx.update_editor(|e, window, cx| e.cut(&Cut, window, cx));
+    cx.assert_editor_state("one\ntwoˇ");
+    assert_eq!(
+        cx.read_from_clipboard()
+            .and_then(|item| item.text().as_deref().map(str::to_string)),
+        Some("   \n".to_string())
+    );
+
+    // A last line with text is also a whole line: the preceding newline
+    // is removed, consistent with non-last lines.
+    cx.set_state("one\ntwo\nthreeˇ");
+    cx.update_editor(|e, window, cx| e.cut(&Cut, window, cx));
+    cx.assert_editor_state("one\ntwoˇ");
+    assert_eq!(
+        cx.read_from_clipboard()
+            .and_then(|item| item.text().as_deref().map(str::to_string)),
+        Some("three\n".to_string())
+    );
+
     // A buffer containing only an empty line has no preceding newline to cut.
     cx.set_state("ˇ");
     cx.update_editor(|e, window, cx| e.cut(&Cut, window, cx));

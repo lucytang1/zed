@@ -374,6 +374,7 @@ impl Editor {
             for selection in &mut selections {
                 let is_entire_line =
                     (selection.is_empty() && cut_no_selection_line) || self.selections.line_mode();
+                let mut cut_last_line_via_preceding_newline = false;
                 if is_entire_line {
                     selection.start = Point::new(selection.start.row, 0);
                     if !selection.is_empty() && selection.end.column == 0 {
@@ -381,18 +382,20 @@ impl Editor {
                     } else {
                         selection.end = cmp::min(max_point, Point::new(selection.end.row + 1, 0));
                     }
-                    // An empty last line has no trailing newline to consume, so
-                    // the line selection above is empty. Include the preceding
-                    // newline so that cutting the line removes it. Line-mode
+                    // The last line has no trailing newline to consume, so the
+                    // line selection above ends at the buffer end. Include the
+                    // preceding newline so that cutting the last line removes
+                    // the whole line, consistent with other lines. Line-mode
                     // selections are left alone because the edit re-expands them
                     // to their line, which would swallow the previous line.
                     if !self.selections.line_mode()
-                        && selection.is_empty()
+                        && selection.start.row == max_point.row
                         && selection.start.row > 0
                     {
                         let previous_row = selection.start.row - 1;
                         selection.start =
                             Point::new(previous_row, buffer.line_len(MultiBufferRow(previous_row)));
+                        cut_last_line_via_preceding_newline = true;
                     }
                     selection.goal = SelectionGoal::None;
                 }
@@ -402,11 +405,22 @@ impl Editor {
                     text += "\n";
                 }
                 prev_selection_was_entire_line = is_entire_line;
+                let mut selection_text = String::new();
                 let mut len = 0;
                 for chunk in buffer.text_for_range(selection.start..selection.end) {
-                    text.push_str(chunk);
+                    selection_text.push_str(chunk);
                     len += chunk.len();
                 }
+                // Cutting the last line via the preceding newline yields text
+                // with a leading newline (e.g. "\n   "), while every other
+                // line cut yields trailing-newline text (e.g. "   \n").
+                // Normalize to trailing newline so the clipboard stays
+                // consistent and line-wise paste inserts before the line.
+                if cut_last_line_via_preceding_newline && selection_text.starts_with('\n') {
+                    selection_text.remove(0);
+                    selection_text.push('\n');
+                }
+                text.push_str(&selection_text);
 
                 clipboard_selections.push(ClipboardSelection::for_buffer(
                     len,
