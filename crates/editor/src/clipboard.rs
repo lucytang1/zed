@@ -382,12 +382,8 @@ impl Editor {
                     } else {
                         selection.end = cmp::min(max_point, Point::new(selection.end.row + 1, 0));
                     }
-                    // The last line has no trailing newline to consume, so the
-                    // line selection above ends at the buffer end. Include the
-                    // preceding newline so that cutting the last line removes
-                    // the whole line, consistent with other lines. Line-mode
-                    // selections are left alone because the edit re-expands them
-                    // to their line, which would swallow the previous line.
+                    // Last line has no trailing newline; so include the preceeding one from the previous line instead.
+                    // Skip line-mode: its edit re-expands and would eat the previous line.
                     if !self.selections.line_mode()
                         && selection.start.row == max_point.row
                         && selection.start.row > 0
@@ -411,11 +407,7 @@ impl Editor {
                     selection_text.push_str(chunk);
                     len += chunk.len();
                 }
-                // Cutting the last line via the preceding newline yields text
-                // with a leading newline (e.g. "\n   "), while every other
-                // line cut yields trailing-newline text (e.g. "   \n").
-                // Normalize to trailing newline so the clipboard stays
-                // consistent and line-wise paste inserts before the line.
+                // Normalize leading newline to trailing for consistent paste.
                 if cut_last_line_via_preceding_newline && selection_text.starts_with('\n') {
                     selection_text.remove(0);
                     selection_text.push('\n');
